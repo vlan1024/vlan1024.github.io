@@ -1,0 +1,513 @@
+! ======================================================================
+! H3C FULL COMMAND LIBRARY - COMPLETE LIST
+! ======================================================================
+
+! ______________________________________________________________________
+! 1. SYSTEM INITIALIZATION & USER MANAGEMENT
+! ______________________________________________________________________
+sys
+undo copyright-info enable
+
+system-view
+password-control length 9
+undo password-control change-password first-login enable
+
+local-user admin1 class manage
+ password simple Password1
+ service-type telnet http https ssh
+ authorization-attribute user-role network-admin
+ quit
+
+! Display Commands
+! display local-user
+! display password-control blacklist
+! display password-control 
+! display configuration sessions 
+! reset password-control blacklist
+! reset password-control history-record
+
+! ______________________________________________________________________
+! 2. VIRTUAL TERMINAL (SSH/TELNET)
+! ______________________________________________________________________
+line vty 0 4
+ idle-timeout 35000
+ authentication-mode scheme
+ user-role network-admin
+ protocol inbound all
+ screen-length 120
+ quit
+
+! ______________________________________________________________________
+! 3. CONSOLE SETTINGS
+! ______________________________________________________________________
+line con 0
+ idle-timeout 35
+ ! authentication-mode scheme
+ ! user-role network-admin
+ ! For some models:
+ ! authentication-mode password   ! console password
+ ! set authentication password simple Password1
+ quit
+
+! line aux0
+! idle-timeout 35
+
+! ______________________________________________________________________
+! 4. ENABLE NETWORK SERVICES
+! ______________________________________________________________________
+sys
+ip http enable
+ip https enable
+ssh server enable
+telnet server enable
+snmp-agent sys-info version v2
+lldp global enable 
+
+! ______________________________________________________________________
+! 5. SNMP V2 CONFIGURATION
+! ______________________________________________________________________
+lldp global enable 
+snmp-agent sys-info version v2c       
+snmp-agent sys-info contact H3C-TR 
+snmp-agent sys-info location ANKARA  
+snmp-agent packet max-size 10240
+snmp-agent community HCCom321 user-role level-15
+
+! Read/Write Communities
+snmp-agent community read simple H3CCom123 mib-view ViewDefault
+snmp-agent community write simple H3CCom321 mib-view ViewDefault 
+
+! Trap Settings
+! snmp-agent target-host trap address udp-domain 192.168.1.141 params securityname h3c-user v2c
+
+! ______________________________________________________________________
+! 6. SNMP V3 CONFIGURATION
+! ______________________________________________________________________
+sys
+snmp-agent
+undo snmp-agent sys-info version v2c  
+snmp-agent sys-info version v3
+snmp-agent group v3 h3cgroup read-view ViewDefault  
+snmp-agent mib-view included View-Default iso
+snmp-agent usm-user v3 h3cuser h3cgroup simple authentication-mode md5 H3CCom123 privacy-mode aes128 H3CCom321
+
+! snmp-agent target-host trap address udp-domain 192.168.1.141 params securityname h3c-user v3
+
+! ______________________________________________________________________
+! 7. REMOTE MANAGEMENT & SYSLOG
+! ______________________________________________________________________
+! NETCONF
+! netconf soap http enable
+! netconf soap https enable
+! netconf ssh server enable
+
+! SYSLOG SERVER
+! logging loghost 192.168.1.123
+
+! ______________________________________________________________________
+! 8. ALIAS SHORTCUTS
+! ______________________________________________________________________
+alias reload reboot f
+alias wr save f
+alias dip dis ip int brief
+wr
+
+! ______________________________________________________________________
+! 9. CLOCK & NTP CONFIGURATION
+! ______________________________________________________________________
+! Manual Clock
+clock protocol none
+clock datetime 19:03 10/19/2022
+sys
+undo clock summer-time
+clock timezone UTC add 03:00:00
+
+! NTP Service
+ntp-service enable
+clock protocol ntp
+ntp-service unicast-server 192.168.1.225
+ntp-service unicast-server 192.168.5.1 minpoll 7 maxpoll 7
+clock timezone UTC add 03:00:00
+
+! ______________________________________________________________________
+! 10. NEIGHBOR DISCOVERY (LLDP)
+! ______________________________________________________________________
+lldp global enable
+dis lldp neighbor-information list
+
+! ______________________________________________________________________
+! 11. INTERFACE: TRUNK / UPLINK
+! ______________________________________________________________________
+interface GigabitEthernet 1/0/24
+ port link-mode bridge
+ port link-type trunk
+ port trunk permit vlan all
+
+! ______________________________________________________________________
+! 12. INTERFACE: HYBRID (AP / IP PHONE)
+! ______________________________________________________________________
+interface gig1/0/8
+ port link-type hybrid
+ undo port hybrid vlan 3
+ port hybrid vlan 24 tagged
+ port hybrid vlan 3 untagged
+ ! port hybrid vlan 2 4 24 tagged  ! Multiple tags example
+
+! ______________________________________________________________________
+! 13. INTERFACE: ACCESS (USER VLAN)
+! ______________________________________________________________________
+VLAN 5 
+ NAME VLAN5-MNG 
+interface GigabitEthernet1/0/8
+ port link-mode bridge
+ port access vlan 5
+ poe enable 
+
+! ______________________________________________________________________
+! 14. MANAGEMENT IP & ROUTING
+! ______________________________________________________________________
+interface Vlan-interface 1
+ ip address 192.168.5.254 24
+
+! Default Route
+ip route-static 0.0.0.0 0.0.0.0 192.168.5.1
+
+! ______________________________________________________________________
+! 15. DHCP SERVER
+! ______________________________________________________________________
+dhcp enable
+dhcp server ip-pool pool5
+ network 192.168.5.0 24
+ gateway-list 192.168.5.1
+ address range 192.168.5.100 192.168.5.200
+ dns-list 208.67.222.222 8.8.8.8
+
+interface vlan-interface 5
+ dhcp select server 
+
+! DHCP Display Commands
+! dis dhcp server pool
+! dis dhcp server ip-in-use
+! reset dhcp server conflict { all | ip ip-address }
+! reset dhcp server ip-in-use { all | ip ip-address | pool [ pool-name ] }
+! tftp-server ip-address 10.1.1.1
+! display dhcp server free-ip
+! display dhcp server statistics
+
+! ______________________________________________________________________
+! 16. DHCP RELAY
+! ______________________________________________________________________
+dhcp enable
+interface vlan-interface 10 
+ dhcp select relay 
+ dhcp relay server-address 10.1.1.1 
+! display dhcp relay statistics
+! display dhcp relay client-information 
+
+! ______________________________________________________________________
+! 17. POE & DEFAULT INTERFACE SETTINGS
+! ______________________________________________________________________
+interface range GigabitEthernet1/0/1 to GigabitEthernet1/0/24 
+ poe enable 
+ 
+interface range GigabitEthernet1/0/1 to GigabitEthernet1/0/8 
+ default 
+ ! Warning: 'default' resets all config on the port
+
+! ______________________________________________________________________
+! 18. BACKUP & FILE MANAGEMENT
+! ______________________________________________________________________
+! Archive to Flash
+sys
+mkdir archive
+archive configuration location flash:/archive filename-prefix conf 
+archive configuration interval 1440
+archive configuration max 10
+
+! Restore from TFTP
+restore startup-configuration from 192.168.5.155 conf.cfg
+reboot force 
+
+! Copy Commands
+! copy ftp://user:private@1.1.1.1/test.cfg testbackup.cfg
+! copy tftp://1.1.1.1/test.cfg testbackup.cfg
+! copy flash:/test/1.cfg usba0:/testbackup/1backup.cfg
+
+! Folder Operations
+! mkdir test
+! more startup.cfg
+! mount usba0:
+! format usba0:
+! dir usba0:
+
+! ______________________________________________________________________
+! 19. CONFIG DISPLAY & RESET
+! ______________________________________________________________________
+display current-configuration diff 
+display current-configuration      
+
+! Factory Reset
+! reset saved-configuration
+! reboot force
+! (Answer 'N' to save, 'Y' to reboot)
+
+! Save Config
+save force
+! or
+! alias wr save f
+! wr 
+
+! ______________________________________________________________________
+! 20. FIRMWARE UPGRADE
+! ______________________________________________________________________
+! tftp 2.2.2.2 get s6300.ipe
+! boot-loader file flash:/s6300.ipe slot 0 main
+! display boot-loader
+! display version 
+! display version-update-record 
+! dir /all /all-filesystems
+
+! ______________________________________________________________________
+! 21. LINK AGGREGATION (LACP)
+! ______________________________________________________________________
+interface Bridge-Aggregation1
+ description LAGG-TO-SPINE
+ port link-type trunk
+ port trunk permit vlan 5 101
+ port trunk pvid vlan 101
+ link-aggregation mode dynamic
+ 
+interface Gigabitethernet 1/0/1
+ port link-aggregation group 1
+
+interface Gigabitethernet 1/0/2
+ port link-aggregation group 1
+ ! port link-aggregation group 1 force
+
+! ______________________________________________________________________
+! 22. LOGGING CONFIGURATION
+! ______________________________________________________________________
+logging enable
+info-center enable
+info-center synchronous
+info-center logging suppress duplicates
+info-center loghost 192.168.5.19 facility local0
+info-center source default loghost deny           ! Deny all first
+info-center source LPDT loghost level informational
+info-center source MAC loghost level informational
+info-center source ARP loghost level informational
+info-center source SHELL loghost deny 
+info-center source IFNET loghost deny
+info-center source STP loghost deny
+info-center source CFGMAN loghost deny
+
+! ______________________________________________________________________
+! 23. ACL (ACCESS CONTROL LIST)
+! ______________________________________________________________________
+acl advanced 3001
+ description 3001-acl
+ rule 100 deny ip destination 200.200.251.101 0 logging
+ rule 101 deny ip destination 200.200.251.102 0 logging
+ rule 102 deny udp source 200.200.180.0 0.0.0.255 destination-port eq 67 
+ rule 103 deny udp source 200.80.1.0 0.0.0.255 destination-port eq 67 
+ rule 104 permit udp destination-port eq bootps
+ rule 105 deny icmp destination 200.200.180.1 0
+ rule 106 permit ip
+
+! Apply ACL
+interface vlan3001
+ packet-filter 3001 inbound
+
+! ______________________________________________________________________
+! 24. QOS & TRAFFIC POLICY
+! ______________________________________________________________________
+acl advanced 3000
+ rule permit icmp source 192.168.131.2 0 destination 192.168.131.1 0
+ rule permit icmp source 192.168.131.1 0 destination 192.168.131.2 0
+
+traffic classifier 1 operator and
+ if-match acl 3000
+
+traffic behavior 1
+ accounting packet 
+
+qos policy 1
+ classifier 1 behavior 1
+
+interface HG1/0/11
+ qos apply policy 1 inbound
+ qos apply policy 1 outbound
+
+! Verify QoS
+! reset counters interface g 1/0/1
+! display qos policy interface HG 1/0/11
+
+! ______________________________________________________________________
+! 25. RADIUS & 802.1X
+! ______________________________________________________________________
+radius scheme radius1
+ primary authentication 192.168.5.101 key simple Password1
+ primary accounting 192.168.5.101 key simple Password1
+ accounting-on enable
+ accounting-on extended
+ key authentication simple Password1
+ key accounting simple Password1
+ timer realtime-accounting 20 second
+ user-name-format without-domain
+
+domain h3cba.local
+ authentication lan-access radius-scheme radius1 local
+ authorization lan-access radius-scheme radius1 local
+ accounting lan-access radius-scheme radius1 local
+
+dot1x
+dot1x authentication-method eap
+
+interface GigabitEthernet1/0/24
+ description dot1x
+ dot1x
+ undo dot1x handshake
+ dot1x mandatory-domain h3cba.local
+
+! ______________________________________________________________________
+! 26. PORT MIRRORING
+! ______________________________________________________________________
+system-view
+mirroring-group 1 local
+mirroring-group 1 mirroring-port GigabitEthernet 1/0/24 both
+mirroring-group 1 monitor-port GigabitEthernet 1/0/14        
+display mirroring-group all
+
+! ______________________________________________________________________
+! 27. NAT CONFIGURATION
+! ______________________________________________________________________
+nat address-group 1
+ address 178.251.46.233 178.251.46.233
+acl basic 2023
+ rule 100 permit source 192.168.1.0 0.0.0.255
+ rule 101 permit source 192.168.2.0 0.0.0.255
+ rule 200 deny any 
+
+interface Dialer1
+ description INT-ISP-TTNET
+ mtu 1492
+ tcp mss 1412
+ nat outbound 2023 address-group 1
+ nat server protocol tcp global 178.251.46.233 22 inside 192.168.5.19 22
+ nat server protocol udp global 178.251.46.233 500 inside 192.168.5.19 500
+ 
+! display nat address-group
+! display nat all
+! display nat outbound
+! display nat statistic
+
+! ______________________________________________________________________
+! 28. LOOPBACK DETECTION
+! ______________________________________________________________________
+loopback-detection global enable vlan 1 to 4094 
+loopback-detection interval-time 30  
+shutdown-interval 300  
+! shutdown-interval 0  ! Keeps port closed
+
+interface GigabitEthernet1/0/1
+ bpdu-drop any
+ loopback-detection enable vlan 1 to 4094
+ loopback-detection action shutdown
+
+! ______________________________________________________________________
+! 29. DEBUGGING & LOG ANALYSIS
+! ______________________________________________________________________
+! terminal monitor 
+! terminal debug 
+! debugging arp entry
+! debugging ip icmp
+! undo debugging all
+! display debugging
+
+! Source IP Based Debug
+acl basic 2025
+ rule 1 permit source 31.200.9.137 0
+debugging ip icmp acl 2025
+
+! Log File Management
+! display logbuffer revers
+! logfile save  
+! more logfile.log 
+! reset logbuffer
+
+! ______________________________________________________________________
+! 30. TRANSCEIVER (SFP) LOGS
+! ______________________________________________________________________
+display transceiver interface  
+display transceiver alarm interface GigabitEthernet 1/1
+display transceiver diagnosis interface GigabitEthernet 1/1 
+display transceiver itu-channel interface 1/1
+display transceiver manuinfo interface GigabitEthernet 1/1
+reset transceiver interface GigabitEthernet 1/0/1
+
+! ______________________________________________________________________
+! 31. HARDWARE RESOURCES & INFO
+! ______________________________________________________________________
+display diagnostic-information
+display system health 
+display process all 
+display environment 
+display memory summary
+display cpu-usage summary
+display device verbose 
+display device manuinfo 
+display power 
+display fan 
+display poe device 
+display poe pse 
+display power-supply verbose
+display resource-monitor
+
+! ______________________________________________________________________
+! 32. INTERFACE STATISTICS
+! ______________________________________________________________________
+display counters rate inbound interface
+display counters rate outbound interface
+display counters inbound interface
+display counters outbound interface
+display interface link-info
+display packet-drop interface
+display interface brief
+display interface brief down
+display ethernet statistics slot 1
+display interface ten-gigabitethernet 1/0/1
+display interface split-capable
+
+! Reset Statistics
+reset ethernet statistics
+reset packet-drop interface 
+reset counters interface 
+reset crc-error bit-error-ratio status interface 
+
+! ______________________________________________________________________
+! 33. IP ROUTING & OPTIMIZATION
+! ______________________________________________________________________
+display ip fast-forwarding cache
+display ip routing-table
+display ip routing-table statistics
+
+! IP Service Optimization
+session aging-time state tcp-est 300  
+ip fast-forwarding aging-time 20
+undo ip redirects enable
+undo ip unreachables enable
+undo ip ttl-expires enable
+undo ip icmp source
+show tcp 
+show udp 
+display ip statistics
+display session table ipv4
+
+! ______________________________________________________________________
+! 34. IP NETSTREAM
+! ______________________________________________________________________
+interface Dialer1
+ ip netstream inbound
+ ip netstream outbound
+ 
+display ip netstream cache
