@@ -74,8 +74,10 @@ snmp-agent packet max-size 10240
 snmp-agent community HCCom321 user-role level-15
 
 ! Read/Write Communities
-snmp-agent community read simple H3CCom123 mib-view ViewDefault
-snmp-agent community write simple H3CCom321 mib-view ViewDefault 
+snmp-agent
+snmp-agent sys-info version all
+snmp-agent community read simple public mib-view ViewDefault
+snmp-agent community write simple private mib-view ViewDefault 
 
 ! Trap Settings
 ! snmp-agent target-host trap address udp-domain 192.168.1.141 params securityname h3c-user v2c
